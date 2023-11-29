@@ -2,10 +2,19 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net7.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
+        <PublishAot>true</PublishAot>
+        <OtherFlags>$(OtherFlags) --reflectionfree --strict-indentation</OtherFlags>
+        <IlcDisableReflection>true</IlcDisableReflection>
+        <WarnOn>3559</WarnOn>
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Printf.fs" />
+        <Compile Include="Errno.fs" />
+        <Compile Include="Syscall.fs" />
+        <Compile Include="Socket.fs" />
+        <Compile Include="HttpRequest.fs" />
         <Compile Include="Program.fs"/>
     </ItemGroup>
 

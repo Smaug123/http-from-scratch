@@ -1,0 +1,98 @@
+{
+  description = "Declarative .NET Gitea configuration";
+
+  inputs = {
+    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "nixpkgs/nixpkgs-unstable";
+  };
+
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    ...
+  }:
+    flake-utils.lib.eachDefaultSystem (system: let
+      pkgs = nixpkgs.legacyPackages.${system};
+      projectFile = "./Gitea.Declarative/Gitea.Declarative.fsproj";
+      testProjectFile = "./Gitea.Declarative.Test/Gitea.Declarative.Test.fsproj";
+      pname = "gitea-repo-config";
+      dotnet-sdk = pkgs.dotnet-sdk_8;
+      dotnet-runtime = pkgs.dotnetCorePackages.runtime_8_0;
+      version = "0.1";
+      dotnetTool = toolName: toolVersion: sha256:
+        pkgs.stdenvNoCC.mkDerivation rec {
+          name = toolName;
+          version = toolVersion;
+          nativeBuildInputs = [pkgs.makeWrapper];
+          src = pkgs.fetchNuGet {
+            pname = name;
+            version = version;
+            sha256 = sha256;
+            installPhase = ''mkdir -p $out/bin && cp -r tools/net6.0/any/* $out/bin'';
+          };
+          installPhase = ''
+            runHook preInstall
+            mkdir -p "$out/lib"
+            cp -r ./bin/* "$out/lib"
+            makeWrapper "${dotnet-runtime}/bin/dotnet" "$out/bin/${name}" --add-flags "$out/lib/${name}.dll"
+            runHook postInstall
+          '';
+        };
+    in {
+      packages = {
+        fantomas = dotnetTool "fantomas" (builtins.fromJSON (builtins.readFile ./.config/dotnet-tools.json)).tools.fantomas.version "sha256-zYSF53RPbGEQt1ZBcHVYqEPHrFlmI1Ty3GQPW1uxPWw=";
+        fetchDeps = let
+          flags = [];
+          runtimeIds = ["win-x64"] ++ map (system: pkgs.dotnetCorePackages.systemToDotnetRid system) dotnet-sdk.meta.platforms;
+        in
+          pkgs.writeShellScriptBin "fetch-${pname}-deps" (builtins.readFile (pkgs.substituteAll {
+            src = ./nix/fetchDeps.sh;
+            pname = pname;
+            binPath = pkgs.lib.makeBinPath [pkgs.coreutils dotnet-sdk (pkgs.nuget-to-nix.override {inherit dotnet-sdk;})];
+            projectFiles = toString (pkgs.lib.toList projectFile);
+            testProjectFiles = toString (pkgs.lib.toList testProjectFile);
+            rids = pkgs.lib.concatStringsSep "\" \"" runtimeIds;
+            packages = dotnet-sdk.packages;
+            storeSrc = pkgs.srcOnly {
+              src = ./.;
+              pname = pname;
+              version = version;
+            };
+          }));
+        default = pkgs.buildDotnetModule {
+          pname = pname;
+          name = "gitea-repo-config";
+          version = version;
+          src = ./.;
+          projectFile = projectFile;
+          nugetDeps = ./nix/deps.nix;
+          doCheck = true;
+          dotnet-sdk = dotnet-sdk;
+          dotnet-runtime = dotnet-runtime;
+        };
+      };
+      apps = {
+        default = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/Gitea.Declarative";
+        };
+      };
+      devShells = {
+        default = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            (with dotnetCorePackages;
+              combinePackages [
+                dotnet-sdk_8
+                dotnetPackages.Nuget
+              ])
+          ] ++ [pkgs.swift darwin.apple_sdk.frameworks.Foundation darwin.apple_sdk.frameworks.CryptoKit darwin.apple_sdk.frameworks.GSS pkgs.zlib pkgs.zlib.dev pkgs.openssl pkgs.icu];
+          packages = [
+            pkgs.alejandra
+            pkgs.nodePackages.markdown-link-check
+            pkgs.shellcheck
+          ];
+        };
+      };
+    });
+}
