@@ -8,6 +8,9 @@ open System.Text
 module Program =
     [<EntryPoint>]
     let main argv =
+        let parentSw = Stopwatch.StartNew ()
+        parentSw.Restart ()
+
         let sw = Stopwatch.StartNew ()
 
         let ip =
@@ -38,7 +41,7 @@ module Program =
                             Value = "close"
                         }
                     ]
-                Body = Array.Empty<_> ()
+                Body = None
             }
             |> fun r -> r.ToBytes ()
 
@@ -73,6 +76,10 @@ module Program =
 
             result.ToArray ()
 
-        Console.WriteLine (System.Text.Encoding.ASCII.GetString response)
+        parentSw.Stop ()
+
+        Console.WriteLine (Encoding.ASCII.GetString response)
+
+        Printfn.time "Total time:" parentSw.ElapsedMilliseconds
 
         0

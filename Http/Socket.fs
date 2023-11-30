@@ -82,15 +82,17 @@ module Sock =
             match isDone with
             | ConnectionState.Interrupted ->
                 // It's OK to get "already connected", we were previously interrupted and we can't tell
-                // how far the connection had got before we retried
+                // how far the connection had got before we retried.
+                // I *have* seen this succeed but then a later write get ENOTCONN, and I don't know why.
                 if err = Errno.EISCONN then
+                    Console.WriteLine "Ignoring EISCONN after EINTR"
                     isDone <- ConnectionState.Done
                 else
                     failwithf "failed to connect: %O" err
             | _ ->
 
             if err = Errno.EINTR then
-                printfn "Retrying due to EINTR"
+                Console.WriteLine "Retrying connect due to EINTR"
                 isDone <- ConnectionState.Interrupted
             else
                 failwithf "failed to connect: %O" err

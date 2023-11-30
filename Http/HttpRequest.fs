@@ -33,11 +33,15 @@ type FieldLine =
         // obvious candidate to improve speed by allocating less
         this.ToString () |> Encoding.ASCII.GetBytes |> request.AddRange
 
+type ContentTransfer =
+    | ContentLength
+    | TransferEncoding of string
+
 type HttpRequest =
     {
         Request : RequestLine
         Headers : FieldLine list
-        Body : byte[]
+        Body : (byte[] * ContentTransfer) option
     }
 
     member this.ToBytes () : byte[] =
@@ -64,7 +68,21 @@ type HttpRequest =
             builder.Add (byte '\r')
             builder.Add (byte '\n')
 
+        match this.Body with
+        | None -> ()
+        | Some (_, ContentTransfer.TransferEncoding encoding) ->
+            builder.AddRange (Encoding.ASCII.GetBytes "Transfer-Encoding: ")
+            builder.AddRange (Encoding.ASCII.GetBytes encoding)
+        | Some (body, ContentTransfer.ContentLength) ->
+            builder.AddRange (Encoding.ASCII.GetBytes "Content-Length: ")
+            builder.AddRange (Encoding.ASCII.GetBytes (body.Length.ToString ()))
+
         builder.Add (byte '\r')
         builder.Add (byte '\n')
+
+        match this.Body with
+        | None -> ()
+        | Some (_body, ContentTransfer.TransferEncoding _) -> failwith "not implemented"
+        | Some (body, ContentTransfer.ContentLength) -> builder.AddRange body
 
         builder.ToArray ()
